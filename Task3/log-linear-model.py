@@ -5,7 +5,9 @@
 # %%
 import heapq
 import nltk
+from nltk.stem import PorterStemmer 
 import numpy as np
+import pandas as pd
 import random
 import string
 
@@ -25,32 +27,24 @@ from torch.autograd import Variable
 from torch.nn import functional as F
 
 # %%
-rootdir = 'txt_sentoken'
-samples_paths = []
-for subdir, dirs, files in os.walk(rootdir):
-    for file in files:
-        name = os.path.join(subdir, file)
-        samples_paths.append(name)
+# read data
+data = pd.read_csv('boydstun_nyt_frontpage_dataset_1996-2006_0_pap2014_recoding_updated2018.csv',  encoding = "ISO-8859-1")
 # %%
-random.seed(1)
-random.shuffle(samples_paths)
-test_paths = samples_paths[:400]
-train_paths = samples_paths[400:]
-# %%
-
-article_text = ''
+# extract texts and labels
 texts = []
 labels = []
 
-for path in samples_paths:
-    with open(path, "r") as f:
-        text = f.read()
-        article_text += text
-        texts.append(text)
-    if 'pos' in path:
-        labels.append(1)
+for i, row in data.iterrows():
+    labels.append(row.majortopic)
+    check = row.isnull()
+    if check[-2] and check[-1]:
+        texts.append(' ')
+    elif check[-2]:
+        texts.append(row.summary)
+    elif check[-1]:
+        texts.append(row.title)
     else:
-        labels.append(0)
+        texts.append(row.title + ' ' + row.summary)
 
 # %%
 for i in range(len(texts)):
@@ -59,36 +53,58 @@ for i in range(len(texts)):
     texts[i] = re.sub(r'\s+', ' ', texts[i])
 
 # %%
+ps = PorterStemmer() 
+
 wordfreq = {}
-for review in texts:
-    tokens = nltk.word_tokenize(review)
+for article in texts:
+    tokens = nltk.word_tokenize(article)
     for token in tokens:
+        token = ps.stem(token)
         if token not in wordfreq.keys():
             wordfreq[token] = 1
         else:
             wordfreq[token] += 1
 # %%
-most_freq = heapq.nlargest(8783, wordfreq, key=wordfreq.get)
-# %%
-review_vectors = []
-for review in texts:
-    review_tokens = nltk.word_tokenize(review)
-    review_vec = []
-    for token in most_freq:
-        if token in review_tokens:
-            review_vec.append(1)
+wordfreq_wo_stemming = {}
+for article in texts:
+    tokens = nltk.word_tokenize(article)
+    for token in tokens:
+        if token not in wordfreq_wo_stemming.keys():
+            wordfreq_wo_stemming[token] = 1
         else:
-            review_vec.append(0)
-    review_vectors.append(review_vec)
+            wordfreq_wo_stemming[token] += 1
 # %%
-review_vectors = np.asarray(review_vectors)
+most_freq_100 = heapq.nlargest(100, wordfreq, key=wordfreq.get)
+most_freq_1000 = heapq.nlargest(1000, wordfreq, key=wordfreq.get)
+most_freq_10000 = heapq.nlargest(10000, wordfreq, key=wordfreq.get)
+all_stemming = wordfreq
+all_wo_stemming = wordfreq_wo_stemming
+
+sizes = [most_freq_100, most_freq_1000, most_freq_10000, all_stemming, all_wo_stemming]
+
+# %%
+article_vectors_sizes = []
+for size in sizes:
+    article_vectors = []
+    for article in texts:
+        article_tokens = nltk.word_tokenize(article)
+        article_vec = []
+        for token in size:
+            if token in article_tokens:
+                article_vec.append(1)
+            else:
+                article_vec.append(0)
+        article_vectors.append(article_vec)
+    article_vectors_sizes.append(article_vectors)
+# %%
+article_vectors = np.asarray(article_vectors)
 
 with open('onehot10.npy', 'wb') as f:
-    np.save(f, review_vectors)
+    np.save(f, article_vectors)
     np.save(f, np.asarray(labels))
 # %%
 pca = PCA(n_components=200)
-data = pca.fit_transform(review_vectors)
+data = pca.fit_transform(article_vectors)
 
 # %%
 
