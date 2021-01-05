@@ -2,7 +2,6 @@
 # jgygax@ethz.ch
 # 16-922-064
 
-
 # %%
 import os
 import random

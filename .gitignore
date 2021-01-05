@@ -2001,3 +2001,5 @@ Task3/txt_sentoken/pos/cv999_13106.txt
 Task3/opinion-lexicon-English/negative-words.txt
 Task3/opinion-lexicon-English/positive-words.txt
 Task3/poldata.README.2.0
+Task3/onehot10.npy
+Task3/boydstun_nyt_frontpage_dataset_1996-2006_0_pap2014_recoding_updated2018.csv
