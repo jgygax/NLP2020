@@ -1,3 +1,8 @@
+# Julia Gygax
+# jgygax@ethz.ch
+# 16-922-064
+
+
 # %%
 import os
 import random
@@ -54,5 +59,11 @@ print("====================================")
 
 print("Accuracy: \t", accuracy_score(true_labels, estim_labels))
 print("F-score: \t", f1_score(true_labels, estim_labels))
+
+# ====================================
+#    USING LEXICON-BASED CLASSIFIER   
+# ====================================
+# Accuracy: 	 0.73
+# F-score: 	 0.7244897959183672
 
 # %%

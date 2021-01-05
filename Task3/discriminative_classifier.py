@@ -1,13 +1,14 @@
+# Julia Gygax
+# jgygax@ethz.ch
+# 16-922-064
+
 # %%
 import heapq
-from nltk.data import find
 import nltk
 import numpy as np
 import random
 import string
 
-import bs4 as bs
-import urllib.request
 import re
 
 import os
@@ -17,6 +18,7 @@ from sklearn.metrics import accuracy_score, f1_score
 
 import numpy as np
 from sklearn.decomposition import PCA
+from sklearn.linear_model import LogisticRegression
 
 # %%
 rootdir = 'txt_sentoken'
@@ -76,6 +78,10 @@ for review in texts:
     review_vectors.append(review_vec)
 # %%
 review_vectors = np.asarray(review_vectors)
+
+with open('onehot10.npy', 'wb') as f:
+    np.save(f, review_vectors)
+    np.save(f, np.asarray(labels))
 # %%
 pca = PCA(n_components=200)
 data = pca.fit_transform(review_vectors)
@@ -86,4 +92,22 @@ test_data = data[0:400]
 train_data = data[400:]
 test_labels = labels[0:400]
 train_labels = labels[400:]
+# %%
+
+clf = LogisticRegression(random_state=0).fit(train_data, train_labels)
+pred = clf.predict(test_data)
+# %%
+print("================================================")
+print("   USING BAG OF WORDS AND LOGISTIC REGRESSION   ")
+print("================================================")
+
+print("Accuracy: \t", accuracy_score(test_labels, pred))
+print("F-score: \t", f1_score(test_labels, pred))
+
+# ================================================
+#    USING BAG OF WORDS AND LOGISTIC REGRESSION
+# ================================================
+# Accuracy: 	 0.845
+# F-score: 	     0.8516746411483254
+
 # %%
