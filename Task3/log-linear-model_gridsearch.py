@@ -96,8 +96,7 @@ most_freq_1000 = heapq.nlargest(1000, wordfreq, key=wordfreq.get)
 most_freq_10000 = heapq.nlargest(10000, wordfreq, key=wordfreq.get)
 all_stemming = wordfreq
 
-sizes = [list(most_freq_100), list(most_freq_1000),
-         list(most_freq_10000)]
+sizes = [list(all_stemming)]
 
 # %%
 all_vectors = []
@@ -124,19 +123,20 @@ print("vectorized")
 print("saved")
 # %%
 
-size_num = [100, 1000, 10000, len(all_stemming)]
+size_num = [len(all_stemming)]
 
 ref_list = list(set(labels))
 cleaned_labels = [ref_list.index(i) for i in labels]
 
 # %%
 
-lrs=[0.001,0.005, 0.01, 0.05, 0.1, 0.2, 0.3]
-max_epochs=list(range(50,500, 50))
-weight_decays = [0.0001,0.001,0.005, 0.01, 0.05, 0.1, 0.2, 0.3]
+lrs=  [0.05]
+max_epochs=[50]
+weight_decays = [0]
 
-data=all_vectors[0]
 idx=0
+data=all_vectors[idx]
+
 
 class LogLinearModel(torch.nn.Module):
     def __init__(self):
@@ -149,6 +149,9 @@ class LogLinearModel(torch.nn.Module):
 
 
 max_accuracy = 0
+m_F = 0
+acc_test = 0
+f_test = 0
 params = []
 for lr, max_epoch, weight_decay in itertools.product(lrs, max_epochs, weight_decays):
     print("--------------------------------------------------")
@@ -166,7 +169,7 @@ for lr, max_epoch, weight_decay in itertools.product(lrs, max_epochs, weight_dec
 
     model = LogLinearModel()
     criterion = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay)
+    optimizer = torch.optim.SGD(model.parameters(), lr=lr)
 
     for epoch in range(max_epoch):
         model.train()
@@ -177,19 +180,32 @@ for lr, max_epoch, weight_decay in itertools.product(lrs, max_epochs, weight_dec
         optimizer.step()
 
     y_pred_val = model(dev_data)
-    pred = torch.max(y_pred_val.data, 1)
+    pred_val = torch.max(y_pred_val.data, 1)
 
-    pred = pred[1].numpy()
+    pred_val = pred_val[1].numpy()
+
     print("================================================")
     print(lr, max_epoch, weight_decay)
     print("================================================")
-    acc =  accuracy_score(dev_labels, pred)
+    acc =  accuracy_score(dev_labels, pred_val)
+    f = f1_score(dev_labels, pred_val, average='macro')
     if max_accuracy < acc:
         max_accuracy = acc
+        m_f = f
         params = [lr, max_epoch, weight_decay]
+
+        y_pred_test = model(test_data)
+        pred_test = torch.max(y_pred_test.data, 1)
+
+        pred_test = pred_test[1].numpy()
+        acc_test = accuracy_score(test_labels, pred_test)
+        f_test = f1_score(test_labels, pred_test, average='macro')
+
     print("Accuracy: \t", acc)
-    print("F-score: \t", f1_score(dev_labels, pred, average='macro'))
+    print("F-score: \t", f)
 
 
-print(max_accuracy, *params)
+print(max_accuracy, m_f, acc_test, f_test, *params)
 # %%
+
+# For size 100:  0.05 150 0.001
