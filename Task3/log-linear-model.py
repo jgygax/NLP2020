@@ -5,7 +5,7 @@
 # %%
 import heapq
 import nltk
-from nltk.stem import PorterStemmer 
+from nltk.stem import PorterStemmer
 import numpy as np
 import pandas as pd
 import random
@@ -28,7 +28,8 @@ from torch.nn import functional as F
 
 # %%
 # read data
-data = pd.read_csv('boydstun_nyt_frontpage_dataset_1996-2006_0_pap2014_recoding_updated2018.csv',  encoding = "ISO-8859-1")
+data = pd.read_csv(
+    'boydstun_nyt_frontpage_dataset_1996-2006_0_pap2014_recoding_updated2018.csv',  encoding="ISO-8859-1")
 # %%
 # extract texts and labels
 texts = []
@@ -46,14 +47,16 @@ for i, row in data.iterrows():
     else:
         texts.append(row.title + ' ' + row.summary)
 
+print("extracted")
 # %%
 for i in range(len(texts)):
     texts[i] = texts[i].lower()
     texts[i] = re.sub(r'\W', ' ', texts[i])
     texts[i] = re.sub(r'\s+', ' ', texts[i])
 
+print("cleaned")
 # %%
-ps = PorterStemmer() 
+ps = PorterStemmer()
 
 wordfreq = {}
 for article in texts:
@@ -73,6 +76,8 @@ for article in texts:
             wordfreq_wo_stemming[token] = 1
         else:
             wordfreq_wo_stemming[token] += 1
+
+print("stemmed")
 # %%
 most_freq_100 = heapq.nlargest(100, wordfreq, key=wordfreq.get)
 most_freq_1000 = heapq.nlargest(1000, wordfreq, key=wordfreq.get)
@@ -80,10 +85,11 @@ most_freq_10000 = heapq.nlargest(10000, wordfreq, key=wordfreq.get)
 all_stemming = wordfreq
 all_wo_stemming = wordfreq_wo_stemming
 
-sizes = [most_freq_100, most_freq_1000, most_freq_10000, all_stemming, all_wo_stemming]
+sizes = [most_freq_100, most_freq_1000,
+         most_freq_10000]
 
 # %%
-article_vectors_sizes = []
+all_vectors = []
 for size in sizes:
     article_vectors = []
     for article in texts:
@@ -95,60 +101,72 @@ for size in sizes:
             else:
                 article_vec.append(0)
         article_vectors.append(article_vec)
-    article_vectors_sizes.append(article_vectors)
-# %%
-article_vectors = np.asarray(article_vectors)
+    article_vectors = torch.FloatTensor(article_vectors)
+    all_vectors.append(article_vectors)
 
-with open('onehot10.npy', 'wb') as f:
-    np.save(f, article_vectors)
+print("vectorized")
+# %%
+
+with open('onehot-times-all.npy', 'wb') as f:
+    np.save(f, all_vectors[0])
+    np.save(f, all_vectors[1])
+    np.save(f, all_vectors[2])
     np.save(f, np.asarray(labels))
-# %%
-pca = PCA(n_components=200)
-data = pca.fit_transform(article_vectors)
 
+print("saved")
 # %%
 
-test_data = data[0:400]
-train_data = data[400:]
-test_labels = labels[0:400]
-train_labels = labels[400:]
-# %%
+size_num = [100,1000,10000]
 
-x_data = Variable(torch.Tensor([[10.0], [9.0], [3.0], [2.0]]))
-y_data = Variable(torch.Tensor([[90.0], [80.0], [50.0], [30.0]]))
-# %%
-
-
-class LogLinearModel(torch.nn.Module):
-    def __init__(self):
-        super(LogLinearModel, self).__init__()
-        self.linear = torch.nn.Linear(1, 1)
-
-    def forward(self, x):
-        y = self.linear(x)
-        y_pred = torch.sigmoid(y)
-        return y_pred
-
+ref_list = list(set(labels))
+cleaned_labels = [ref_list.index(i) for i in labels]
 
 # %%
-model = LogLinearModel()
-# %%
-criterion = torch.nn.MSELoss(size_average=False)
-# %%
-optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
+for idx, data in enumerate(all_vectors):
 
-# %%
-for epoch in range(20):
-    model.train()
-    optimizer.zero_grad()    # Forward pass
-    y_pred = model(x_data)    # Compute Loss
-    loss = criterion(y_pred, y_data)    # Backward pass
-    loss.backward()
-    optimizer.step()
+    class LogLinearModel(torch.nn.Module):
+        def __init__(self):
+            super(LogLinearModel, self).__init__()
+            self.linear = torch.nn.Linear(size_num[idx], 28)
 
-# %%
+        def forward(self, x):
+            y_pred = F.sigmoid(self.linear(x))
+            return y_pred
 
-new_x = Variable(torch.Tensor([[4.0]]))
-y_pred = model(new_x)
-print("predicted Y value: ", y_pred.data[0][0])
-# %%
+    print("--------------------------------------------------")
+    print("Using a vocabulary of: ", sizes[idx])
+    n = len(data)
+    train_len = int(0.6*n)
+    dev_len = int(0.8*n)
+
+    train_data = data[0:train_len]
+    dev_data = data[train_len:dev_len]
+    test_data = data[dev_len:]
+    train_labels = torch.LongTensor(cleaned_labels[0:train_len])
+    dev_labels = torch.LongTensor(cleaned_labels[train_len:dev_len])
+    test_labels = torch.LongTensor(cleaned_labels[dev_len:])
+
+    model = LogLinearModel()
+    criterion = torch.nn.CrossEntropyLoss()
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
+
+    for epoch in range(500):
+        model.train()
+        optimizer.zero_grad()                       # Forward pass
+        y_pred = model(train_data)                  # Compute Loss
+        loss = criterion(y_pred, train_labels)      # Backward pass
+        loss.backward()
+        optimizer.step()
+
+
+
+    y_pred = model(test_data)
+    pred=torch.max(y_pred.data,1)
+
+    pred = pred[1].numpy()
+    print("================================================")
+    print("   USING BAG OF WORDS AND LOGISTIC REGRESSION   ")
+    print("================================================")
+
+    print("Accuracy: \t", accuracy_score(test_labels, pred))
+    print("F-score: \t", f1_score(test_labels, pred, average='macro'))

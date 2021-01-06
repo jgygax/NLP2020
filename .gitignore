@@ -2003,3 +2003,6 @@ Task3/opinion-lexicon-English/positive-words.txt
 Task3/poldata.README.2.0
 Task3/onehot10.npy
 Task3/boydstun_nyt_frontpage_dataset_1996-2006_0_pap2014_recoding_updated2018.csv
+Task3/onehot-times-100.npy
+Task3/onehot-times-all.npy
+Task3/onehot-times-all_wo_stemming.npy
