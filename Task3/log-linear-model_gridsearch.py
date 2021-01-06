@@ -28,7 +28,7 @@ from torch.nn import functional as F
 import string
 from nltk.corpus import stopwords
 
-from sklearn.model_selection import GridSearchCV
+import itertools
 # %%
 # read data
 data = pd.read_csv(
@@ -131,23 +131,26 @@ cleaned_labels = [ref_list.index(i) for i in labels]
 
 # %%
 
-params = {
-    'lr': [0.001,0.005, 0.01, 0.05, 0.1, 0.2, 0.3],
-    'max_epochs': list(range(50,500, 50)),
-    'weight_decay': [0.0001,0.001,0.005, 0.01, 0.05, 0.1, 0.2, 0.3]
-}
+lrs=[0.001,0.005, 0.01, 0.05, 0.1, 0.2, 0.3]
+max_epochs=list(range(50,500, 50))
+weight_decays = [0.0001,0.001,0.005, 0.01, 0.05, 0.1, 0.2, 0.3]
 
-for idx, data in enumerate(all_vectors):
+data=all_vectors[0]
+idx=0
 
-    class LogLinearModel(torch.nn.Module):
-        def __init__(self):
-            super(LogLinearModel, self).__init__()
-            self.linear = torch.nn.Linear(size_num[idx], 28)
+class LogLinearModel(torch.nn.Module):
+    def __init__(self):
+        super(LogLinearModel, self).__init__()
+        self.linear = torch.nn.Linear(size_num[idx], 28)
 
-        def forward(self, x):
-            y_pred = torch.sigmoid(self.linear(x))
-            return y_pred
+    def forward(self, x):
+        y_pred = torch.sigmoid(self.linear(x))
+        return y_pred
 
+
+max_accuracy = 0
+params = []
+for lr, max_epoch, weight_decay in itertools.product(lrs, max_epochs, weight_decays):
     print("--------------------------------------------------")
     print("Using a vocabulary of: ", size_num[idx])
     n = len(data)
@@ -161,15 +164,11 @@ for idx, data in enumerate(all_vectors):
     dev_labels = torch.LongTensor(cleaned_labels[train_len:dev_len])
     test_labels = torch.LongTensor(cleaned_labels[dev_len:])
 
-    print(len(train_data), len(train_labels))
-    print(len(dev_data), len(dev_labels))
-    print(len(test_data), len(test_labels))
-
     model = LogLinearModel()
     criterion = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
+    optimizer = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay)
 
-    for epoch in range(500):
+    for epoch in range(max_epoch):
         model.train()
         optimizer.zero_grad()                       # Forward pass
         y_pred = model(train_data)                  # Compute Loss
@@ -182,10 +181,15 @@ for idx, data in enumerate(all_vectors):
 
     pred = pred[1].numpy()
     print("================================================")
-    print("   USING BAG OF WORDS AND LOGISTIC REGRESSION   ")
+    print(lr, max_epoch, weight_decay)
     print("================================================")
-
-    print("Accuracy: \t", accuracy_score(dev_labels, pred))
+    acc =  accuracy_score(dev_labels, pred)
+    if max_accuracy < acc:
+        max_accuracy = acc
+        params = [lr, max_epoch, weight_decay]
+    print("Accuracy: \t", acc)
     print("F-score: \t", f1_score(dev_labels, pred, average='macro'))
 
+
+print(max_accuracy, *params)
 # %%
