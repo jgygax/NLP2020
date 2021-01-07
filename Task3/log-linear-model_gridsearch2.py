@@ -28,7 +28,7 @@ from torch.nn import functional as F
 import string
 from nltk.corpus import stopwords
 
-from sklearn.model_selection import GridSearchCV
+import itertools
 # %%
 # read data
 data = pd.read_csv(
@@ -96,21 +96,10 @@ most_freq_1000 = heapq.nlargest(1000, wordfreq, key=wordfreq.get)
 most_freq_10000 = heapq.nlargest(10000, wordfreq, key=wordfreq.get)
 all_stemming = wordfreq
 
-sizes = [list(most_freq_100), list(most_freq_1000),
-         list(most_freq_10000)]
+sizes = [list(all_stemming)]
 
 # %%
-all_vectors = []
-for size in sizes:
-    article_vectors = []
-    for article_tokens in cleaned_texts:
-        article_vec = [0]*len(size)
-        for token in article_tokens:
-            if token in size:
-                article_vec[size.index(token)] += 1
-        article_vectors.append(article_vec)
-    article_vectors = torch.FloatTensor(article_vectors)
-    all_vectors.append(article_vectors)
+
 
 print("vectorized")
 # %%
@@ -124,68 +113,122 @@ print("vectorized")
 print("saved")
 # %%
 
-size_num = [100, 1000, 10000, len(all_stemming)]
+size_num = [len(all_stemming)]
 
 ref_list = list(set(labels))
 cleaned_labels = [ref_list.index(i) for i in labels]
 
 # %%
 
-params = {
-    'lr': [0.001,0.005, 0.01, 0.05, 0.1, 0.2, 0.3],
-    'max_epochs': list(range(50,500, 50)),
-    'weight_decay': [0.001,0.005, 0.01, 0.05, 0.1, 0.2, 0.3, 0.5, 0.8, 1, 10]
-}
+lrs=  [0.05]
+max_epochs=[50]
+weight_decays = [0.001,0.005, 0.01, 0.05, 0.1, 0.2, 0.3, 0.5, 0.8, 1, 10]
 
-for idx, data in enumerate(all_vectors):
+idx=0
+# data=all_vectors[idx]
+case = list(all_stemming)
 
-    class LogLinearModel(torch.nn.Module):
-        def __init__(self):
-            super(LogLinearModel, self).__init__()
-            self.linear = torch.nn.Linear(size_num[idx], 28)
+class LogLinearModel(torch.nn.Module):
+    def __init__(self):
+        super(LogLinearModel, self).__init__()
+        self.linear = torch.nn.Linear(size_num[idx], 28)
 
-        def forward(self, x):
-            y_pred = torch.sigmoid(self.linear(x))
-            return y_pred
+    def forward(self, x):
+        y_pred = torch.sigmoid(self.linear(x))
+        return y_pred
 
+
+max_accuracy = 0
+m_F = 0
+acc_test = 0
+f_test = 0
+params = []
+n_batches = 13
+batch_size = 622
+for lr, max_epoch, weight_decay in itertools.product(lrs, max_epochs, weight_decays):
     print("--------------------------------------------------")
     print("Using a vocabulary of: ", size_num[idx])
     n = len(data)
-    train_len = int(0.6*n)
-    dev_len = int(0.8*n)
+    train_len = 8086 #int(0.6*n)
+    dev_len = 11196 #int(0.8*n)
 
-    train_data = data[0:train_len]
-    dev_data = data[train_len:dev_len]
-    test_data = data[dev_len:]
+    # train_data = data[0:train_len]
+    # dev_data = data[train_len:dev_len]
+    # test_data = data[dev_len:]
     train_labels = torch.LongTensor(cleaned_labels[0:train_len])
     dev_labels = torch.LongTensor(cleaned_labels[train_len:dev_len])
     test_labels = torch.LongTensor(cleaned_labels[dev_len:])
 
-    print(len(train_data), len(train_labels))
-    print(len(dev_data), len(dev_labels))
-    print(len(test_data), len(test_labels))
-
     model = LogLinearModel()
     criterion = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
+    optimizer = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay)
 
-    for epoch in range(500):
-        model.train()
-        optimizer.zero_grad()                       # Forward pass
-        y_pred = model(train_data)                  # Compute Loss
-        loss = criterion(y_pred, train_labels)      # Backward pass
-        loss.backward()
-        optimizer.step()
+    for epoch in range(max_epoch):
+        for i in range(n_batches):
+            article_vectors = []
+            for article_tokens in cleaned_texts[i:i+batch_size]:
+                article_vec = [0]*len(case)
+                for token in article_tokens:
+                    if token in case:
+                        article_vec[case.index(token)] += 1
+                article_vectors.append(article_vec)
+            article_vectors = torch.FloatTensor(article_vectors)
+
+            model.train()
+            optimizer.zero_grad()                       # Forward pass
+            y_pred = model(article_vectors)                  # Compute Loss
+            loss = criterion(y_pred, train_labels[i:i+batch_size])      # Backward pass
+            loss.backward()
+            optimizer.step()
+
+    dev_data = []
+    for article_tokens in cleaned_texts[8086:11196]:
+        article_vec = [0]*len(case)
+        for token in article_tokens:
+            if token in case:
+                article_vec[case.index(token)] += 1
+        dev_data.append(article_vec)
+    dev_data = torch.FloatTensor(dev_data)
+
+
+    test_data = []
+    for article_tokens in cleaned_texts[11196:]:
+        article_vec = [0]*len(case)
+        for token in article_tokens:
+            if token in case:
+                article_vec[case.index(token)] += 1
+        test_data.append(article_vec)
+    test_data = torch.FloatTensor(test_data)
 
     y_pred_val = model(dev_data)
-    pred = torch.max(y_pred_val.data, 1)
+    pred_val = torch.max(y_pred_val.data, 1)
 
-    pred = pred[1].numpy()
+    pred_val = pred_val[1].numpy()
+
     print("================================================")
-    print("   USING BAG OF WORDS AND LOGISTIC REGRESSION   ")
+    print(lr, max_epoch, weight_decay)
     print("================================================")
+    print(len(pred_val))
+    print(len(dev_labels))
+    acc =  accuracy_score(dev_labels, pred_val)
+    f = f1_score(dev_labels, pred_val, average='macro')
+    if max_accuracy < acc:
+        max_accuracy = acc
+        m_f = f
+        params = [lr, max_epoch, weight_decay]
 
-    print("Accuracy: \t", accuracy_score(dev_labels, pred))
-    print("F-score: \t", f1_score(dev_labels, pred, average='macro'))
+        y_pred_test = model(test_data)
+        pred_test = torch.max(y_pred_test.data, 1)
 
+        pred_test = pred_test[1].numpy()
+        acc_test = accuracy_score(test_labels, pred_test)
+        f_test = f1_score(test_labels, pred_test, average='macro')
+
+    print("Accuracy: \t", acc)
+    print("F-score: \t", f)
+
+
+print(max_accuracy, m_f, acc_test, f_test, *params)
 # %%
+
+# For size 100:  0.05 150 0.001

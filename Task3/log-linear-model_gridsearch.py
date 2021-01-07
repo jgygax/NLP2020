@@ -96,7 +96,8 @@ most_freq_1000 = heapq.nlargest(1000, wordfreq, key=wordfreq.get)
 most_freq_10000 = heapq.nlargest(10000, wordfreq, key=wordfreq.get)
 all_stemming = wordfreq
 
-sizes = [list(all_stemming)]
+sizes = [list(most_freq_100), list(most_freq_1000),
+         list(most_freq_10000)]
 
 # %%
 all_vectors = []
@@ -123,7 +124,7 @@ print("vectorized")
 print("saved")
 # %%
 
-size_num = [len(all_stemming)]
+size_num = [100, 1000, 10000, len(all_stemming)]
 
 ref_list = list(set(labels))
 cleaned_labels = [ref_list.index(i) for i in labels]
@@ -132,9 +133,9 @@ cleaned_labels = [ref_list.index(i) for i in labels]
 
 lrs=  [0.05]
 max_epochs=[50]
-weight_decays = [0]
+weight_decays = [0.001,0.005, 0.01, 0.05, 0.1, 0.2, 0.3, 0.5, 0.8, 1, 10, 12, 20, 100]
 
-idx=0
+idx=2
 data=all_vectors[idx]
 
 
@@ -169,7 +170,7 @@ for lr, max_epoch, weight_decay in itertools.product(lrs, max_epochs, weight_dec
 
     model = LogLinearModel()
     criterion = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.SGD(model.parameters(), lr=lr)
+    optimizer = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay)
 
     for epoch in range(max_epoch):
         model.train()
